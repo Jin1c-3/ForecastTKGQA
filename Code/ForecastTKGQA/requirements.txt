@@ -1,0 +1,6 @@
+transformers==4.2.2
+tqdm
+pytorch
+numpy
+scikit-learn
+scipy

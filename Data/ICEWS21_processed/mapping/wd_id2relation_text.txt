@@ -1,0 +1,253 @@
+P0	Abduct, hijack, or take hostage
+P1	Accede to demands for change in institutions, regime
+P2	Accede to demands for change in leadership
+P3	Accede to demands for change in policy
+P4	Accede to demands for rights
+P5	Accede to requests or demands for political reform
+P6	Accuse
+P7	Accuse of aggression
+P8	Accuse of crime, corruption
+P9	Accuse of espionage, treason
+P10	Accuse of human rights abuses
+P11	Accuse of war crimes
+P12	Acknowledge or claim responsibility
+P13	Allow humanitarian access
+P14	Apologize
+P15	Appeal for aid
+P16	Appeal for change in institutions, regime
+P17	Appeal for change in leadership
+P18	Appeal for de-escalation of military engagement
+P19	Appeal for diplomatic cooperation (such as policy support)
+P20	Appeal for easing of administrative sanctions
+P21	Appeal for easing of economic sanctions, boycott, or embargo
+P22	Appeal for easing of political dissent
+P23	Appeal for economic aid
+P24	Appeal for economic cooperation
+P25	Appeal for humanitarian aid
+P26	Appeal for intelligence
+P27	Appeal for judicial cooperation
+P28	Appeal for material cooperation
+P29	Appeal for military aid
+P30	Appeal for military cooperation
+P31	Appeal for military protection or peacekeeping
+P32	Appeal for policy change
+P33	Appeal for political reform
+P34	Appeal for release of persons or property
+P35	Appeal for rights
+P36	Appeal for target to allow international involvement (non-mediation)
+P37	Appeal to engage in or accept mediation
+P38	Appeal to others to meet or negotiate
+P39	Appeal to others to settle dispute
+P40	Appeal to yield
+P41	Arrest, detain, or charge with legal action
+P42	Assassinate
+P43	Attempt to assassinate
+P44	Ban political parties or politicians
+P45	Bring lawsuit against
+P46	Carry out car bombing
+P47	Carry out roadside bombing
+P48	Carry out suicide bombing
+P49	Coerce
+P50	Complain officially
+P51	Conduct hunger strike
+P52	Conduct hunger strike for leadership change
+P53	Conduct strike or boycott
+P54	Conduct strike or boycott for leadership change
+P55	Conduct suicide, car, or other non-military bombing
+P56	Confiscate property
+P57	Consider policy option
+P58	Consult
+P59	Cooperate economically
+P60	Cooperate militarily
+P61	Criticize or denounce
+P62	Declare truce, ceasefire
+P63	Decline comment
+P64	Defend verbally
+P65	Defy norms, law
+P66	Demand
+P67	Demand change in institutions, regime
+P68	Demand change in leadership
+P69	Demand de-escalation of military engagement
+P70	Demand diplomatic cooperation (such as policy support)
+P71	Demand easing of administrative sanctions
+P72	Demand easing of economic sanctions, boycott, or embargo
+P73	Demand easing of political dissent
+P74	Demand economic aid
+P75	Demand economic cooperation
+P76	Demand humanitarian aid
+P77	Demand intelligence cooperation
+P78	Demand judicial cooperation
+P79	Demand material aid
+P80	Demand material cooperation
+P81	Demand mediation
+P82	Demand meeting, negotiation
+P83	Demand military aid
+P84	Demand policy change
+P85	Demand political reform
+P86	Demand release of persons or property
+P87	Demand rights
+P88	Demand settling of dispute
+P89	Demand that target yields
+P90	Demobilize armed forces
+P91	Demonstrate for leadership change
+P92	Demonstrate for policy change
+P93	Demonstrate military or police power
+P94	Demonstrate or rally
+P95	Deny responsibility
+P96	Destroy property
+P97	Detonate nuclear weapons
+P98	Discuss by telephone
+P99	Ease administrative sanctions
+P100	Ease curfew
+P101	Ease economic sanctions, boycott, embargo
+P102	Ease military blockade
+P103	Ease political dissent
+P104	Ease restrictions on political freedoms
+P105	Ease state of emergency or martial law
+P106	Employ aerial weapons
+P107	Engage in diplomatic cooperation
+P108	Engage in ethnic cleansing
+P109	Engage in judicial cooperation
+P110	Engage in mass killings
+P111	Engage in material cooperation
+P112	Engage in negotiation
+P113	Engage in symbolic act
+P114	Engage in violent protest for leadership change
+P115	Engage in violent protest for policy change
+P116	Expel or deport individuals
+P117	Expel or withdraw
+P118	Expel or withdraw peacekeepers
+P119	Express accord
+P120	Express intent to accept mediation
+P121	Express intent to allow international involvement (non-mediation)
+P122	Express intent to change institutions, regime
+P123	Express intent to change leadership
+P124	Express intent to change policy
+P125	Express intent to cooperate
+P126	Express intent to cooperate economically
+P127	Express intent to cooperate militarily
+P128	Express intent to cooperate on intelligence
+P129	Express intent to cooperate on judicial matters
+P130	Express intent to de-escalate military engagement
+P131	Express intent to ease administrative sanctions
+P132	Express intent to ease economic sanctions, boycott, or embargo
+P133	Express intent to ease popular dissent
+P134	Express intent to engage in diplomatic cooperation (such as policy support)
+P135	Express intent to engage in material cooperation
+P136	Express intent to institute political reform
+P137	Express intent to mediate
+P138	Express intent to meet or negotiate
+P139	Express intent to provide economic aid
+P140	Express intent to provide humanitarian aid
+P141	Express intent to provide material aid
+P142	Express intent to provide military aid
+P143	Express intent to provide military protection or peacekeeping
+P144	Express intent to release persons or property
+P145	Express intent to settle dispute
+P146	Express intent to yield
+P147	Forgive
+P148	Give ultimatum
+P149	Grant asylum
+P150	Grant diplomatic recognition
+P151	Halt mediation
+P152	Halt negotiations
+P153	Host a visit
+P154	Impose administrative sanctions
+P155	Impose blockade, restrict movement
+P156	Impose curfew
+P157	Impose embargo, boycott, or sanctions
+P158	Impose restrictions on political freedoms
+P159	Impose state of emergency or martial law
+P160	Increase military alert status
+P161	Increase police alert status
+P162	Investigate
+P163	Investigate crime, corruption
+P164	Investigate human rights abuses
+P165	Investigate military action
+P166	Investigate war crimes
+P167	Kill by physical assault
+P168	Make a visit
+P169	Make an appeal or request
+P170	Make empathetic comment
+P171	Make optimistic comment
+P172	Make pessimistic comment
+P173	Make statement
+P174	Mediate
+P175	Meet at a 'third' location
+P176	Mobilize or increase armed forces
+P177	Mobilize or increase police power
+P178	Obstruct passage to demand leadership change
+P179	Obstruct passage, block
+P180	Occupy territory
+P181	Physically assault
+P182	Praise or endorse
+P183	Protest violently, riot
+P184	Provide aid
+P185	Provide economic aid
+P186	Provide humanitarian aid
+P187	Provide military aid
+P188	Provide military protection or peacekeeping
+P189	Rally opposition against
+P190	Rally support on behalf of
+P191	Receive deployment of peacekeepers
+P192	Receive inspectors
+P193	Reduce or break diplomatic relations
+P194	Reduce or stop economic assistance
+P195	Reduce or stop humanitarian assistance
+P196	Reduce or stop material aid
+P197	Reduce or stop military assistance
+P198	Reduce relations
+P199	Refuse to allow international involvement (non mediation)
+P200	Refuse to de-escalate military engagement
+P201	Refuse to ease administrative sanctions
+P202	Refuse to ease economic sanctions, boycott, or embargo
+P203	Refuse to ease popular dissent
+P204	Refuse to release persons or property
+P205	Refuse to yield
+P206	Reject
+P207	Reject economic cooperation
+P208	Reject judicial cooperation
+P209	Reject material cooperation
+P210	Reject mediation
+P211	Reject military cooperation
+P212	Reject plan, agreement to settle dispute
+P213	Reject proposal to meet, discuss, or negotiate
+P214	Reject request for change in institutions, regime
+P215	Reject request for change in leadership
+P216	Reject request for economic aid
+P217	Reject request for humanitarian aid
+P218	Reject request for military aid
+P219	Reject request for rights
+P220	Reject request or demand for material aid
+P221	Retreat or surrender militarily
+P222	Return, release person(s)
+P223	Return, release property
+P224	Seize or damage property
+P225	Sexually assault
+P226	Share intelligence or information
+P227	Sign formal agreement
+P228	Threaten
+P229	Threaten non-force
+P230	Threaten to ban political parties or politicians
+P231	Threaten to halt negotiations
+P232	Threaten to impose curfew
+P233	Threaten to impose state of emergency or martial law
+P234	Threaten to reduce or break relations
+P235	Threaten to reduce or stop aid
+P236	Threaten with administrative sanctions
+P237	Threaten with military force
+P238	Threaten with political dissent, protest
+P239	Threaten with repression
+P240	Threaten with restrictions on political freedoms
+P241	Threaten with sanctions, boycott, embargo
+P242	Torture
+P243	Use as human shield
+P244	Use chemical, biological, or radiological weapons
+P245	Use conventional military force
+P246	Use tactics of violent repression
+P247	Use unconventional violence
+P248	Veto
+P249	Violate ceasefire
+P250	Yield
+P251	fight with artillery and tanks
+P252	fight with small arms and light weapons
