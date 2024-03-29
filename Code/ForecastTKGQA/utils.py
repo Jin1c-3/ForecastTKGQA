@@ -89,7 +89,7 @@ def getAllDicts(dataset_name):
 	type2id = {'1-hop': 0, '2-hop': 1, 'yes_no': 2, 'multiple_choice': 3}
 
 	def readDict(filename):
-		f = open(filename, 'r')
+		f = open(filename, 'r', encoding="utf-8")
 		d = {}
 		for line in f:
 			line = line.strip().split('\t')

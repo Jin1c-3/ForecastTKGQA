@@ -96,7 +96,7 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 		tail_embedding = torch.repeat_interleave(tail_embedding, 2, dim=0)
 		out = self.score_choice(head_embedding, relation_embedding, tail_embedding, choice_embedding)
 		out = out.view(-1, 2)
-		loss = self.loss(out, answers)
+		loss = self.loss(out, answers.long())
 		return out, loss
 
 	def scores_multiple_choice(self, heads_embed_q, question_embed, tails_embed_q,
