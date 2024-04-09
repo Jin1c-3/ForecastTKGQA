@@ -118,7 +118,7 @@ def load_static(num_rel):
 
     for split in ['train', 'valid', 'test']:
         for line in open('{}.txt'.format(split)):
-            sub, rel, obj, _ = map(str.lower, line.strip().split('\t'))
+            sub, rel, obj, _ = map(str.lower, line.strip().split('\t')[:4])
             sub, rel, obj = int(sub), int(rel), int(obj)
             #data.append((sub, rel, obj))
 

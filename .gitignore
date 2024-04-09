@@ -4,3 +4,5 @@ tango_submission.pkl
 log
 __pycache__
 vscode
+*copy.pickle
+.vscode
