@@ -7,6 +7,7 @@ import os
 import torch.multiprocessing
 import time
 torch.multiprocessing.set_sharing_strategy('file_system')
+import torch.distributed
 
 
 def eval_model(qa_model, dataloader, dataset, split, batch_size, device): # Evaluation code
@@ -45,16 +46,45 @@ def eval_model(qa_model, dataloader, dataset, split, batch_size, device): # Eval
     loader = tqdm(dataloader, total=len(dataloader), unit="batches")
 
     with torch.no_grad():
-        for i_batch, a in enumerate(loader):
-            answers = a[-2]
-            types = a[-3]
+        for i_batch, (b_input_id, b_attention_mask, heads, tails, times, types, answers_single, batch_sentences) in enumerate(loader):
+            question_tokenized = b_input_id.to(device)
+            question_attention_mask = b_attention_mask.to(device)
+            heads = heads.to(device)
+            tails = tails.to(device)
+            times = times.to(device)
+            types = types.to(device)
+            answers = answers_single.to(device)
             if i_batch * batch_size == len(dataset.data):
                 break
-            mask_dis, scores_ep, scores_yn, scores_mc, loss = qa_model.forward(a, device)
+            mask_dis, scores_ep, scores_yn, scores_mc = qa_model.forward(question_tokenized,
+                                                                               question_attention_mask, heads, tails,
+                                                                               times,
+                                                                               types, answers)
+            criterion = torch.nn.CrossEntropyLoss(reduction='mean').cuda(device)
+
+            # 创建一个列表来存储所有的得分
+            scores = [scores_ep, scores_yn, scores_mc]
+
+            # 计算None的数量
+            none_count = scores.count(None)
+
+            # 如果None的数量小于等于1，或者全是None，引发一个异常
+            if none_count <= 1 or none_count == 3:
+                raise ValueError(
+                    f"得分异常，{scores_ep=}, {scores_yn=}, {scores_mc=}")
+
+            # 如果只有一个值不为None，将其存储在score变量中
+            elif none_count == 2:
+                score = next(s for s in scores if s is not None)
+                mask = types < 2 if score is scores_ep else types == 2 if score is scores_yn else types == 3
+                loss = criterion(score, answers[mask])
+            else:
+                raise ValueError("所有得分都不为None，无法确定唯一的得分")
             total_loss += loss.item()
             if mask_dis is not None:
                 answers = answers[mask_dis]
                 types = types[mask_dis]
+            torch.distributed.barrier()
             if scores_ep is not None: # If the question type is entity prediction
                 ind_batch = torch.arange(scores_ep.shape[0]).cuda(device)
                 score_vector = scores_ep[ind_batch, answers.squeeze()].clone()  # scores for right answer
@@ -162,7 +192,7 @@ def eval_hits(truth_entities, hop_types, predicted_answers, eval_log): # Hits@k 
 def eval_acc(predicts, truths, question_type, eval_log): # Accuracy computation
     prediction = np.concatenate(predicts, axis=0)
     prediction = np.argmax(prediction, axis=1).flatten() # Find the candidate with the highest score
-    truth = np.concatenate(truths, )
+    truth = np.concatenate([t.cpu() for t in truths], )
     test_accuracy = (sum(np.array(prediction) == np.array(truth)) / float(len(truth)))
     eval_log.append(f'accuracy for {question_type} {round(test_accuracy, 5)} \t total questions: {len(truth)}')
 

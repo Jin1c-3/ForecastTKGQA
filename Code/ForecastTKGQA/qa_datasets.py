@@ -50,7 +50,7 @@ class QADataset(Dataset): # Base class of dataset
             questions_all.extend(questions)
             self.type2count[q_type] = len(questions)
 
-        self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+        self.tokenizer = DistilBertTokenizer.from_pretrained('/data/qing/distilbert-base-uncased')
         self.all_dicts = utils.getAllDicts(dataset_name)
         print('Total questions = ', len(questions_all))
         self.data = questions_all

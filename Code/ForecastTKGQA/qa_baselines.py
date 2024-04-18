@@ -18,7 +18,7 @@ class QABaseline(nn.Module):
             self.pretrained_weights = 'roberta-base'
             self.lm_model = RobertaModel.from_pretrained(self.pretrained_weights)
         elif args.lm_model == 'distilbert':
-            self.pretrained_weights = 'distilbert-base-uncased'
+            self.pretrained_weights = '/data/qing/distilbert-base-uncased'
             self.lm_model = DistilBertModel.from_pretrained(self.pretrained_weights)
         else:
             raise ValueError('lm model undefined')

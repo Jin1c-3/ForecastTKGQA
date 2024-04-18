@@ -10,7 +10,7 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 
 		# Load pre-trained language model
 		self.sentence_embedding_dim = 768
-		self.pretrained_weights = 'distilbert-base-uncased'
+		self.pretrained_weights = '/data/qing/distilbert-base-uncased'
 		self.lm_model = DistilBertModel.from_pretrained(self.pretrained_weights)
 		for param in self.lm_model.parameters():
 			param.requires_grad = False
@@ -32,7 +32,6 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 
 		self.linear_relation = nn.Linear(768, self.tkg_embedding_dim)  # To project question representation from 768 to self.tkg_embedding_dim
 		self.dropout = torch.nn.Dropout(0.3)
-		self.loss = nn.CrossEntropyLoss(reduction='mean')
 		self.relu = nn.ReLU()
 
 		# # for unify
@@ -85,8 +84,7 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 		im_score = (lhs[0] * rel[1] + lhs[1] * rel[0]).unsqueeze(1)
 		score = re_score * right[0] + im_score * right[1]
 		score = score.sum(dim=2)
-		loss = self.loss(score, answers)
-		return score, loss
+		return score
 
 	def scores_yes_no(self, head_embedding, tail_embedding, relation_embedding, choice_embedding, answers):
 		# Scoring function of fact reasoning questions (Equation (2))
@@ -96,8 +94,7 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 		tail_embedding = torch.repeat_interleave(tail_embedding, 2, dim=0)
 		out = self.score_choice(head_embedding, relation_embedding, tail_embedding, choice_embedding)
 		out = out.view(-1, 2)
-		loss = self.loss(out, answers.long())
-		return out, loss
+		return out
 
 	def scores_multiple_choice(self, heads_embed_q, question_embed, tails_embed_q,
 							   heads_embed_c, choice_embed, tails_embed_c, answers):
@@ -111,8 +108,7 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 		# Scoring
 		out = self.score_choice(heads_embed_c, choice_embed, tails_embed_c, question_cat)
 		out = out.view(-1, 4)  # (batch, 4)
-		loss = self.loss(out, answers)
-		return out, loss
+		return out
 
 	def score_choice(self, head_emb, question_emb, tail_emb, choice):
 		# scoring function of fact reasoning questions
@@ -131,15 +127,7 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 		
 		return score
 
-	def forward(self, a, device):
-		question_tokenized = a[0].cuda(device)
-		question_attention_mask = a[1].cuda(device)
-		heads = a[2].cuda(device)
-		tails = a[3].cuda(device)
-		times = a[4].cuda(device)
-		types = a[5].cuda(device)
-		answers = a[6].cuda(device)
-
+	def forward(self, question_tokenized, question_attention_mask, heads, tails, times, types, answers):
 		# Question representation
 		question = question_tokenized[:, 0, :]
 		question_mask = question_attention_mask[:, 0, :]
@@ -185,9 +173,9 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 			times_ep, answers_ep = times_question[mask_ep], answers[mask_ep]
 			heads_embed_ep = heads_embed_q[mask_ep]
 			# Score computation
-			scores_ep, loss_ep = self.score_entity(heads_embed_ep, relation_embed_ep, times_ep, answers_ep)
+			scores_ep = self.score_entity(heads_embed_ep, relation_embed_ep, times_ep, answers_ep)
 		else:
-			scores_ep, loss_ep, num_ep = None, torch.tensor(0), 0
+			scores_ep = None
 
 		# Yes-no
 		if num_yn > 1:
@@ -204,10 +192,10 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 			choice_embed_yn = self.linear_relation(choice_embed_yn)
 			choice_embed_yn = self.dropout(self.bn_yn(self.linear_bn_yn(choice_embed_yn)))
 			# Score computation
-			scores_yn, loss_yn = self.scores_yes_no(
+			scores_yn = self.scores_yes_no(
 				heads_embed_yn, tails_embed_yn, relation_embed_yn, choice_embed_yn, answers_yn)
 		else:
-			scores_yn, loss_yn, num_yn = None, torch.tensor(0), 0
+			scores_yn = None
 
 		# Fact reasoning (multiple-choice)
 		if num_mc > 1:
@@ -230,11 +218,11 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 			tails_embed_mc_c = self.mc_linear(self.tango_embedding[[times_choice*self.num_entities + tails_choice]])
 			# Score computation
 			answers_mc = answers[mask_mc]
-			scores_mc, loss_mc = self.scores_multiple_choice(heads_embed_mc_q, relation_embed_mc, tails_embed_mc_q,
+			scores_mc = self.scores_multiple_choice(heads_embed_mc_q, relation_embed_mc, tails_embed_mc_q,
 															 heads_embed_mc_c, choice_embed_mc, tails_embed_mc_c,
 															 answers_mc)
 		else:
-			scores_mc, loss_mc, num_mc = None, torch.tensor(0), 0
+			scores_mc = None
 
 		# if self.use_distinguisher:
 		# 	types_num = [num_ep, num_yn, num_mc]
@@ -253,9 +241,8 @@ class ForecastTKGQA(nn.Module): # Model class for ForecastTKGQA
 		# 		loss = torch.tensor(0)
 		# else:
 		# 	loss = loss_ep + loss_yn + loss_mc
-		loss = loss_ep + loss_yn + loss_mc
 
-		return mask_dis, scores_ep, scores_yn, scores_mc, loss
+		return mask_dis, scores_ep, scores_yn, scores_mc
 
 
 class ForecastTKGQA_MHS(nn.Module):
