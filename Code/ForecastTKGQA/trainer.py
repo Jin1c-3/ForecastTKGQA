@@ -12,6 +12,7 @@ import numpy as np
 import random
 import pickle
 import torch.distributed as dist
+import os
 
 seed = 20220801
 os.environ['PYTHONHASHSEED'] = str(seed)
@@ -33,6 +34,17 @@ torch.backends.cudnn.benchmark = False
 # RoBERTa is specified later in LM initialization
 models = ['bert', 'bert_int', 'bert_ext', 'embedkgqa', 'cronkgqa', 'tempoqr', 'forecasttkgqa']
 
+def execute_if_rank_is_zero(func):
+    def wrapper(*args, **kwargs):
+        if dist.get_rank() == 0:
+            return func(*args, **kwargs)
+    return wrapper
+
+@execute_if_rank_is_zero
+def print_if_rank_zero(*args, **kwargs):
+    print(*args, **kwargs)
+
+@execute_if_rank_is_zero
 def append_log_to_file(eval_log, epoch, filename):
     # Help function for logging
     dirname = os.path.dirname(filename)
@@ -49,9 +61,8 @@ def append_log_to_file(eval_log, epoch, filename):
     f.write('\n')
     f.close()
 
+@execute_if_rank_is_zero
 def save_model(qa_model, filename):
-    if not dist.get_rank() == 0:
-        return
     # Help function for saving trained models
     dirname = os.path.dirname(filename)
     if not os.path.exists(dirname):
@@ -140,13 +151,12 @@ def main():
         '--num_transformer_layers', default=6, type=int,
         help="Number of layers for transformers"
     )
-    # parser.add_argument('--device', type=int, default=0, help='cuda device')
-    parser.add_argument('--local-rank', default=-1, type=int, help='node rank for distributed training')
 
     args = parser.parse_args()
     args.batch_size = int(args.batch_size / torch.cuda.device_count())
     dist.init_process_group(backend='gloo')
-    torch.cuda.set_device(args.local_rank)
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
 
     # Path to save logs
     log_filename = 'results/{dataset_name}/{question_type}_{model_file}.log'.format(
@@ -181,7 +191,7 @@ def main():
         qa_model = ForecastTKGQA(4, args)
     else:
         raise ValueError(f'Model {args.model} not implemented!')
-    print('Model is', args.model)
+    print_if_rank_zero('Model is', args.model)
 
     # Prepare data
     # train_dataloader, valid_dataloader, test_dataloader, valid_dataset, test_dataset = prepare_data(args)
@@ -235,15 +245,15 @@ def main():
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=train_sampler,
                                   shuffle=False, num_workers=5,
                                   collate_fn=train_dataset.collate_fn)
-    print(f'info for training set: {train_dataset.get_dataset_ques_info()}')
+    print_if_rank_zero(f'info for training set: {train_dataset.get_dataset_ques_info()}')
     valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_dataset)
     valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, sampler=valid_sampler, shuffle=False,
                                   num_workers=5,
                                   collate_fn=valid_dataset.collate_fn)
-    print(f'info for valid set: {valid_dataset.get_dataset_ques_info()}')
+    print_if_rank_zero(f'info for valid set: {valid_dataset.get_dataset_ques_info()}')
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=5,
                                   collate_fn=test_dataset.collate_fn)
-    print(f'info for test set: {test_dataset.get_dataset_ques_info()}')
+    print_if_rank_zero(f'info for test set: {test_dataset.get_dataset_ques_info()}')
 
     # Load from checkpoint
     if args.load_from != '':
@@ -253,22 +263,21 @@ def main():
         )
         print('Loading model from', model_filename)
         qa_model.load_state_dict(torch.load(model_filename, map_location=torch.device("cpu")))
-        print('Loaded qa model from ', model_filename)
+        print_if_rank_zero('Loaded qa model from ', model_filename)
     else:
         # Make a new log file with args if not loading from any previous file
         log_args = [str(key) + '\t' + str(value) for key, value in vars(args).items()]
         append_log_to_file(log_args, 0, log_filename)
-        print('Not loading from checkpoint. Starting fresh!')
+        print_if_rank_zero('Not loading from checkpoint. Starting fresh!')
 
     # Send model to CUDA
-    torch.cuda.set_device(args.local_rank)
-    qa_model.cuda(args.local_rank)
-    qa_model = torch.nn.parallel.DistributedDataParallel(qa_model, device_ids=[args.local_rank], find_unused_parameters=True)
+    qa_model.cuda(local_rank)
+    qa_model = torch.nn.parallel.DistributedDataParallel(qa_model, device_ids=[local_rank], find_unused_parameters=True)
 
     # Training
     if args.train:
-        print('Starting training')
-        criterion = torch.nn.CrossEntropyLoss(reduction='mean').cuda(args.local_rank)
+        print_if_rank_zero('Starting training')
+        criterion = torch.nn.CrossEntropyLoss(reduction='mean').cuda(local_rank)
 
         # Optimizer Initialization
         optimizer = torch.optim.Adam(qa_model.parameters(), lr=args.lr)
@@ -286,13 +295,13 @@ def main():
                     b_input_id, b_attention_mask, heads, tails, times, types, answers_single,
                     batch_sentences) in enumerate(loader):
                 # Send data to CUDA
-                question_tokenized = b_input_id.cuda(args.local_rank, non_blocking=True)
-                question_attention_mask = b_attention_mask.cuda(args.local_rank, non_blocking=True)
-                heads = heads.cuda(args.local_rank, non_blocking=True)
-                tails = tails.cuda(args.local_rank, non_blocking=True)
-                times = times.cuda(args.local_rank, non_blocking=True)
-                types = types.cuda(args.local_rank, non_blocking=True)
-                answers = answers_single.cuda(args.local_rank, non_blocking=True)
+                question_tokenized = b_input_id.cuda(local_rank, non_blocking=True)
+                question_attention_mask = b_attention_mask.cuda(local_rank, non_blocking=True)
+                heads = heads.cuda(local_rank, non_blocking=True)
+                tails = tails.cuda(local_rank, non_blocking=True)
+                times = times.cuda(local_rank, non_blocking=True)
+                types = types.cuda(local_rank, non_blocking=True)
+                answers = answers_single.cuda(local_rank, non_blocking=True)
                 qa_model.zero_grad()
                 # Compute batch loss
                 _, scores_ep, scores_yn, scores_mc = qa_model.forward(question_tokenized, question_attention_mask,
@@ -325,30 +334,30 @@ def main():
                 loader.set_description('{}/{}'.format(epoch, args.max_epochs))
                 loader.update()
 
-            print('Epoch loss = ', epoch_loss)
+            print_if_rank_zero('Epoch loss = ', epoch_loss)
 
             # Evaluation
             if (epoch + 1) % args.valid_freq == 0:
-                print('Starting validation')
+                print_if_rank_zero('Starting validation')
                 mrr_score, clf_score, choice_score, eval_log = \
-                    eval_model(qa_model, valid_dataloader, valid_dataset, 'valid', args.batch_size, args.local_rank)
+                    eval_model(qa_model, valid_dataloader, valid_dataset, 'valid', args.batch_size, local_rank)
                 save = False
 
                 # If the validation results increase, save checkpoint
                 if mrr_score > max_mrr:
                     save = True
                     eval_log.append(f'Valid mrr score increased from {max_mrr} to {mrr_score}')
-                    print(f'Valid mrr score increased from {max_mrr} to {mrr_score}')
+                    print_if_rank_zero(f'Valid mrr score increased from {max_mrr} to {mrr_score}')
                     max_mrr = mrr_score
                 if clf_score > max_clf_score:
                     save = True
                     eval_log.append(f'Valid yes_no score increased from {max_clf_score} to {clf_score}')
-                    print(f'Valid yes_no score increased from {max_clf_score} to {clf_score}')
+                    print_if_rank_zero(f'Valid yes_no score increased from {max_clf_score} to {clf_score}')
                     max_clf_score = clf_score
                 if choice_score > max_choice_score:
                     save = True
                     eval_log.append(f'Valid choice score increased from {max_choice_score} to {choice_score}')
-                    print(f'Valid choice score increased from {max_choice_score} to {choice_score}')
+                    print_if_rank_zero(f'Valid choice score increased from {max_choice_score} to {choice_score}')
                     max_choice_score = choice_score
                 if save:
                     save_model(qa_model, checkpoint_file_name)
@@ -356,14 +365,14 @@ def main():
                 append_log_to_file(eval_log, epoch, log_filename)
 
                 # Also do test after validation
-                print('Start testing')
-                _, _, choice_score_test, log = eval_model(qa_model, test_dataloader, test_dataset, 'test', args.batch_size, args.local_rank)
+                print_if_rank_zero('Start testing')
+                _, _, choice_score_test, log = eval_model(qa_model, test_dataloader, test_dataset, 'test', args.batch_size, local_rank)
                 append_log_to_file(log, epoch, log_filename)
 
     # Set args.train to False, args.eval to True, for evaluation only
     if args.eval:
-        print("Starting evaluation")
-        _, _, _, log = eval_model(qa_model, test_dataloader, test_dataset, 'test', args.batch_size, args.local_rank)
+        print_if_rank_zero("Starting evaluation")
+        _, _, _, log = eval_model(qa_model, test_dataloader, test_dataset, 'test', args.batch_size, local_rank)
         append_log_to_file(log, 0, log_filename)
 
 

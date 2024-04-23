@@ -1,8 +1,12 @@
 Code/TANGO/checkpoints
 *.log
-tango_submission.pkl
+*.pkl
 log
 __pycache__
 vscode
 *copy.pickle
 .vscode
+*.ckpt
+command.sh
+.idea
+*.sh

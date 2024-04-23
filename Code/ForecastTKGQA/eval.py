@@ -91,7 +91,7 @@ def eval_model(qa_model, dataloader, dataset, split, batch_size, device): # Eval
                 filter = torch.zeros_like(scores_ep)
                 filter_idx = 0  # from 0 to 255
                 # assert 0, len(a[8])
-                for text_idx in a[-1]:  # a[-1] sentences list for indexing
+                for text_idx in batch_sentences:  # a[-1] sentences list for indexing
                     # assert filter_idx < 256, text_idx
                     answers_multiple = filter_dict[text_idx][-1]
                     filter[filter_idx, answers_multiple] = 0.5  # index data in batch, change data in corresponding position from zero to a half
