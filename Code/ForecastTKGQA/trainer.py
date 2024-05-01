@@ -241,12 +241,12 @@ def main():
             with open('data/ICEWS21/filter_dict.pkl', 'wb') as f:
                 pickle.dump(filter_dict, f)
     # Prepare dataloaders
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset,dist.get_world_size(),local_rank)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=train_sampler,
                                   shuffle=False, num_workers=5,
                                   collate_fn=train_dataset.collate_fn)
     print_if_rank_zero(f'info for training set: {train_dataset.get_dataset_ques_info()}')
-    valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_dataset)
+    valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_dataset,dist.get_world_size(),local_rank)
     valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, sampler=valid_sampler, shuffle=False,
                                   num_workers=5,
                                   collate_fn=valid_dataset.collate_fn)

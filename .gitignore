@@ -10,3 +10,5 @@ vscode
 command.sh
 .idea
 *.sh
+*.npy
+*.out
