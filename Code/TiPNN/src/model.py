@@ -109,11 +109,14 @@ class TiPNN(nn.Module):
         # (batch_size, num_negative + 1, dim) -> (batch_size, num_negative + 1)
         score = self.mlp(feature_t).squeeze(-1)
 
-        # create a new dictionary
+        # 建立一个特征词典，把特征传到main里面存储起来
         feature_dict = {}
         for i in range(h_index.shape[0]):
             key = (h_index[i, 0].item(), r_index[i, 0].item())
-            feature_dict[key] = score[i].cpu().numpy()
+            if len(feature_t[i]) == 1:
+                feature_dict[key] = feature_t[i][0].cpu().numpy()
+            else:
+                feature_dict[key] = feature_t[i].cpu().numpy()
 
         return score.view(shape), feature_dict
 

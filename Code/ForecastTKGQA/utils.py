@@ -2,9 +2,8 @@ import pickle
 import torch
 from tcomplex import TComplEx
 import io
-import os
-from datetime import datetime
-
+import numpy as np
+import ddputils
 
 class CPU_Unpickler(pickle.Unpickler):
 	def find_class(self, module, name):
@@ -60,13 +59,26 @@ def load_complex(complex_file, device):
 def load_tango(tango_file):
 	# Load TANGO checkpoint pre-trained with ICEWS21
 	print('Loading tango model from', tango_file)
-	in_file = open(tango_file, 'rb')
-	# time2emb = CPU_Unpickler(in_file).load()
-	time2emb = pickle.load(in_file)
-	for k, v in time2emb.items():
-		time2emb[k] = torch.tensor(v[:20575], requires_grad=False, device='cpu')
-	in_file.close()
+	with open(tango_file, 'rb') as in_file:
+		# time2emb = CPU_Unpickler(in_file).load()
+		time2emb = pickle.load(in_file)
+		for k, v in time2emb.items():
+			time2emb[k] = torch.tensor(v[:20575], requires_grad=False, device='cpu')
 	return time2emb
+
+
+def load_tipnn(tipnn_file):
+    # Load TiPNN checkpoint pre-trained with ICEWS21
+    print('Loading tipnn model from', tipnn_file)
+    time2emb = np.load(tipnn_file, allow_pickle=True).item()
+
+    for time, emb_dict in time2emb.items():
+        for k, v in emb_dict.items():
+            v_tensor = torch.from_numpy(v)  # Convert numpy ndarray to PyTorch tensor
+            emb_dict[k] = v_tensor.clone().detach().to(ddputils.get_device())
+        time2emb[time] = emb_dict
+
+    return time2emb
 
 
 def getAllDicts(dataset_name):

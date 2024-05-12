@@ -1,11 +1,12 @@
 import torch
 from torch import nn
 from transformers import DistilBertModel
-from utils import load_tango, load_tcomplex
+from utils import load_tango, load_tipnn
+import ddputils
 
 
 class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
-    def __init__(self, num_question_type, args):
+    def __init__(self, args):
         super().__init__()
 
         # Load pre-trained language model
@@ -15,12 +16,17 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
         for param in self.lm_model.parameters():
             param.requires_grad = False
 
-        # Load pre-trained TANGO representations
         if "tango" in args.tkg_model_file:
+            self.tkg_embedding_type = "tango"
+        elif "tipnn" in args.tkg_model_file:
+            self.tkg_embedding_type = "tipnn"
+        else:
+            raise ValueError("tkg model type undefined")
+
+        # Load pre-trained TANGO representations
+        if "tango" == self.tkg_embedding_type:
             self.tango_model = load_tango(
-                "models/{dataset_name}/kg_embeddings/{tkg_model_file}".format(
-                    dataset_name=args.dataset_name, tkg_model_file=args.tkg_model_file
-                )
+                f"models/{args.dataset_name}/kg_embeddings/{args.tkg_model_file}"
             )
             self.tkg_embedding_dim = list(self.tango_model.values())[0].shape[1]
             self.num_entities = list(self.tango_model.values())[0].shape[0]
@@ -34,11 +40,30 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
             print(f"tkg embed: {self.tkg_embedding_dim}")
             self.tango_embedding.requires_grad = False
             self.tango_weights.requires_grad = False
+        # Load pre-trained TiPNN representations
+        elif "tipnn" == self.tkg_embedding_type:
+            self.tipnn_model = load_tipnn(
+                f"models/{args.dataset_name}/kg_embeddings/{args.tkg_model_file}"
+            )
+            # Assuming the first key in the dictionary is representative
+            first_key = next(iter(self.tipnn_model.keys()))
+            first_sub_key = next(iter(self.tipnn_model[first_key].keys()))
+            self.tkg_embedding_dim = self.tipnn_model[first_key][first_sub_key].shape[0]
+            # self.tipnn_weights = nn.Parameter(
+            #     torch.stack([torch.stack(list(self.tipnn_model[t].values())) for t in self.tipnn_model.keys()])
+            # )
+            # self.tipnn_embedding = nn.Parameter(
+            #     self.tipnn_weights.view(-1, self.tipnn_embedding_dim)
+            # )
+            self.rank = int(self.tkg_embedding_dim / 2)
+            print(f"tipnn embed: {self.tkg_embedding_dim}")
+            # self.tipnn_embedding.requires_grad = False
+            # self.tipnn_weights.requires_grad = False
         else:
             raise ValueError("tkg model type undefined")
 
         self.linear_relation = nn.Linear(
-            768, self.tkg_embedding_dim
+            self.sentence_embedding_dim, self.tkg_embedding_dim
         )  # To project question representation from 768 to self.tkg_embedding_dim
         self.dropout = torch.nn.Dropout(0.3)
         self.relu = nn.ReLU()
@@ -71,13 +96,17 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
         states = bert_last_hidden_states.transpose(1, 0)
         return states[0]
 
-    def score_entity(self, head_embedding, relation_embedding, times, answers):
+    def score_entity(self, head_embedding, relation_embedding, times):
         # Scoring function of entity prediction questions (Equation (1))
         head_embedding = self.ep_linear(head_embedding)
         lhs = head_embedding[:, : self.rank], head_embedding[:, self.rank :]
         rel = relation_embedding[:, : self.rank], relation_embedding[:, self.rank :]
 
-        right = self.tango_weights[times]
+        if "tango" == self.tkg_embedding_type:
+            right = self.tango_weights[times]
+        elif "tipnn" == self.tkg_embedding_type:
+            right = self.tipnn_model[times].values()
+
         right = self.ep_linear(right)
         right = right[:, :, : self.rank], right[:, :, self.rank :]
         re_score = (lhs[0] * rel[0] - lhs[1] * rel[1]).unsqueeze(1)
@@ -92,7 +121,6 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
         tail_embedding,
         relation_embedding,
         choice_embedding,
-        answers,
     ):
         # Scoring function of fact reasoning questions (Equation (2))
         head_embedding = torch.repeat_interleave(head_embedding, 2, dim=0)
@@ -112,7 +140,6 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
         heads_embed_c,
         choice_embed,
         tails_embed_c,
-        answers,
     ):
         # Scoring function of fact reasoning questions
 
@@ -162,6 +189,7 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
         times,
         types,
         answers,
+        relations,
     ):
         # Question representation
         question = question_tokenized[:, 0, :]
@@ -172,7 +200,7 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
         relation_embedding = self.linear_relation(
             question_embedding
         )  # Map to dimension of TKG representations
-        mask_dis = None
+        mask_dis = None # 这玩意儿啥用也没有
 
         mask_ep = types < 2
         mask_yn = types == 2
@@ -186,14 +214,42 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
         heads_question, heads_choice = heads[:, 0], heads[:, 1:]
         tails_question, tails_choice = tails[:, 0], tails[:, 1:]
         times_question, times_choice = times[:, 0], times[:, 1:]
+        relations_question, relations_choice = relations[:, 0], relations[:, 1:]
 
-        # TANGO
-        heads_embed_q = self.tango_embedding[
-            times_question * self.num_entities + heads_question
-        ]
-        tails_embed_q = self.tango_embedding[
-            times_question * self.num_entities + tails_question
-        ]
+        if self.tkg_embedding_type == "tango":
+            # TANGO
+            heads_embed_q = self.tango_embedding[
+                times_question * self.num_entities + heads_question
+            ]
+            tails_embed_q = self.tango_embedding[
+                times_question * self.num_entities + tails_question
+            ]
+        elif self.tkg_embedding_type == "tipnn":
+            heads_embed_q = []
+            tails_embed_q = []
+
+            for i in range(len(heads_question)):
+                head = heads_question[i].item()
+                tail = tails_question[i].item()
+                time = times_question[i].item()
+                rel = relations_question[i]
+                if len(rel) > 1:
+                    if (str(head), str(rel[0])) not in self.tipnn_model[str(time)].keys():
+                        head_embed = self.tipnn_model[str(time)][(str(head), str(rel[1]))]
+                    else:
+                        head_embed = self.tipnn_model[str(time)][(str(head), str(rel[0]))]
+                    if (tail, str(rel[0])) not in self.tipnn_model[str(time)].keys():
+                        tail_embed = self.tipnn_model[str(time)][(tail, str(rel[1]))]
+                    else:
+                        tail_embed = self.tipnn_model[str(time)][(tail, str(rel[0]))]
+                else:
+                    head_embed = self.tipnn_model[str(time)][(str(head), str(rel[0]))]
+                    tail_embed = self.tipnn_model[str(time)][(tail, str(rel[0]))]
+                heads_embed_q.append(head_embed)
+                tails_embed_q.append(tail_embed)
+
+            heads_embed_q = torch.stack(heads_embed_q)
+            tails_embed_q = torch.stack(tails_embed_q)
 
         # Entity prediction
         if num_ep > 1:
@@ -202,12 +258,10 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
             relation_embed_ep = self.dropout(
                 self.bn_entity(self.linear_bn_entity(relation_embed_ep))
             )
-            times_ep, answers_ep = times_question[mask_ep], answers[mask_ep]
+            times_ep = times_question[mask_ep]
             heads_embed_ep = heads_embed_q[mask_ep]
             # Score computation
-            scores_ep = self.score_entity(
-                heads_embed_ep, relation_embed_ep, times_ep, answers_ep
-            )
+            scores_ep = self.score_entity(heads_embed_ep, relation_embed_ep, times_ep)
         else:
             scores_ep = None
 
@@ -218,7 +272,6 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
             relation_embed_yn = self.dropout(
                 self.bn_yn(self.linear_bn_yn(relation_embed_yn))
             )
-            times_yn, answers_yn = times_question[mask_yn], answers[mask_yn]
             heads_embed_yn = self.yn_linear(heads_embed_q[mask_yn])
             tails_embed_yn = self.yn_linear(tails_embed_q[mask_yn])
             # Encode representations of yes and no
@@ -239,7 +292,6 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
                 tails_embed_yn,
                 relation_embed_yn,
                 choice_embed_yn,
-                answers_yn,
             )
         else:
             scores_yn = None
@@ -271,6 +323,7 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
             heads_choice = torch.flatten(heads_choice[mask_mc])
             tails_choice = torch.flatten(tails_choice[mask_mc])
             times_choice = torch.flatten(times_choice[mask_mc])
+            # TODO checkout tango_embedding havn't been updated
             heads_embed_mc_c = self.mc_linear(
                 self.tango_embedding[[times_choice * self.num_entities + heads_choice]]
             )
@@ -278,7 +331,6 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
                 self.tango_embedding[[times_choice * self.num_entities + tails_choice]]
             )
             # Score computation
-            answers_mc = answers[mask_mc]
             scores_mc = self.scores_multiple_choice(
                 heads_embed_mc_q,
                 relation_embed_mc,
@@ -286,7 +338,6 @@ class ForecastTKGQA(nn.Module):  # Model class for ForecastTKGQA
                 heads_embed_mc_c,
                 choice_embed_mc,
                 tails_embed_mc_c,
-                answers_mc,
             )
         else:
             scores_mc = None

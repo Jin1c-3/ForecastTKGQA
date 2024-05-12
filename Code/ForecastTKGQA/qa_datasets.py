@@ -32,17 +32,13 @@ class QADataset(Dataset):  # Base class of dataset
 
         for q_type in question_type:
             # Choose questions with question type
-            filename = "data/{dataset_name}/questions/{q_type}/{split}.pickle".format(
-                dataset_name=dataset_name, q_type=q_type, split=split
-            )
-            to_load = open(filename, "rb")
-
-            # Load questions
-            questions = pickle.load(to_load)
-            to_load.close()
-            questions = random.sample(questions, int(len(questions) * float(pct)))
-            questions_all.extend(questions)
-            self.type2count[q_type] = len(questions)
+            filename = f"data/{dataset_name}/questions/{q_type}/{split}.pickle"
+            with open(filename, "rb") as file:
+                # Load questions
+                questions = pickle.load(file)
+                questions = random.sample(questions, int(len(questions) * float(pct)))
+                questions_all.extend(questions)
+                self.type2count[q_type] = len(questions)
 
         self.tokenizer = DistilBertTokenizer.from_pretrained(
             "/data/qing/distilbert-base-uncased", model_max_length=512
@@ -64,6 +60,17 @@ class QADataset(Dataset):  # Base class of dataset
             location = question_text.find(e)
             loc_ent.append((location, e_id))
         return loc_ent
+
+    def get_loc_rel_pairs(self, question):
+        question_text = question["question"] 
+        relations = question["relations"] 
+        rel2id = self.all_dicts["rel2id"]
+        loc_rel = []
+        for r in relations:
+            r_id = rel2id[r]
+            location = question_text.find(r)
+            loc_rel.append((location, r_id))
+        return loc_rel
 
     def get_loc_time_pairs(self, question):
         question_text = question["question"]  # Question
@@ -107,8 +114,11 @@ class QADataset(Dataset):  # Base class of dataset
             raise ValueError(
                 f'{dictionary_type} {dictionary["uniq_id"]} contains no time'
             )
-
-        return text, head, tail, time, q_type, answers
+        relations_list_with_locations = self.get_loc_rel_pairs(dictionary)
+        relations_list_with_locations.sort()
+        # Ordering necessary otherwise set->list conversion causes randomness
+        relations = [idx for location, idx in relations_list_with_locations]
+        return text, head, tail, time, q_type, answers, relations
 
     def create_ep_filter(self):
         for i, question in enumerate(self.data):
@@ -443,10 +453,11 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
         times = []
         types = []
         answers_arr = []
+        relations = []
         self.data_ids_filtered = []
         for i, question in enumerate(data):
             self.data_ids_filtered.append(i)
-            q_text, q_head, q_tail, q_time, q_type, answers = self.get_item_from_dict(
+            q_text, q_head, q_tail, q_time, q_type, answers, q_relation = self.get_item_from_dict(
                 question, "question"
             )
             types.append(q_type)
@@ -456,13 +467,15 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
                 heads.append([])
                 tails.append([])
                 times.append([])
+                relations.append([])
                 question_text[-1].append(q_text)
                 heads[-1].append(q_head)
                 tails[-1].append(q_tail)
                 times[-1].append(q_time)
+                relations[-1].append(q_relation)
                 choices = question["choices"]
                 for choice_dict in choices:
-                    choice_text, choice_head, choice_tail, choice_time, _, _ = (
+                    choice_text, choice_head, choice_tail, choice_time, _, choice_relation, choice_relation = (
                         self.get_item_from_dict(choice_dict, "choice")
                     )
                     question_text[-1].append(
@@ -471,6 +484,7 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
                     heads[-1].append(choice_head)
                     tails[-1].append(choice_tail)
                     times[-1].append(choice_time)
+                    relations[-1].append(choice_relation)
             else:
                 if q_type == 2:
                     question_text.append([q_text, "unknown", "yes", "", ""])
@@ -479,6 +493,8 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
                 heads.append([q_head, -1, -1, -1, -1])
                 tails.append([q_tail, -1, -1, -1, -1])
                 times.append([q_time, -1, -1, -1, -1])
+                q_relation = q_relation if len(q_relation) == 2 else q_relation + [-1]
+                relations.append([q_relation, [-1,-1], [-1,-1], [-1,-1], [-1,-1]])
         self.data = [self.data[idx] for idx in self.data_ids_filtered]
         return {
             "question_text": question_text,
@@ -487,6 +503,7 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
             "time": times,
             "answers_arr": answers_arr,
             "type": types,
+            "relation": relations,
         }
 
     def __getitem__(self, index):
@@ -498,7 +515,8 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
         q_type = data["type"][index]
         answers_arr = data["answers_arr"][index]
         answers_single = random.choice(answers_arr)
-        return question_text, head, tail, time, q_type, answers_single
+        relation = data["relation"][index]
+        return question_text, head, tail, time, q_type, answers_single, relation
 
     def collate_fn(self, items):
         b_input_id, b_attention_mask, batch_sentences = [], [], []
@@ -533,6 +551,7 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
         times = torch.from_numpy(np.array([item[3] for item in items]))
         types = torch.from_numpy(np.array([item[4] for item in items]))
         answers_single = torch.from_numpy(np.array([item[5] for item in items]))
+        relations = torch.tensor([item[6] for item in items])
         return (
             b_input_id,
             b_attention_mask,
@@ -542,6 +561,7 @@ class QADatasetForecast(QADataset):  # Dataset class for ForecastTKGQA
             types,
             answers_single,
             batch_sentences,
+            relations
         )
 
 

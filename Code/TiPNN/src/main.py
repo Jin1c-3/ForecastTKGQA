@@ -83,7 +83,7 @@ def train_and_validate(args, model, train_list, valid_list, test_list, num_nodes
 
         if utils.get_rank() == 0:
             avg_loss = sum(losses) / len(losses)
-            print("average binary cross entropy: {}".format(avg_loss))
+            print(f"average binary cross entropy: {avg_loss}")
             
 
         # evaluation
@@ -205,7 +205,7 @@ def test(model, test_list, num_rels, num_nodes, mode="train", model_name = None)
     return mrr
 
 @torch.no_grad()
-def save_rep(model, test_list, num_rels, num_nodes, model_name, dataset_type, mode="test"):
+def save_rep(model, data_list, num_rels, num_nodes, model_name, dataset_type, mode="test"):
     
     world_size = utils.get_world_size()
     rank = utils.get_rank()
@@ -219,18 +219,21 @@ def save_rep(model, test_list, num_rels, num_nodes, model_name, dataset_type, mo
         model.load_state_dict(checkpoint['state_dict'])
         model = model.to(device)
 
-    idx = [_ for _ in range(len(test_list))] # timestamps index [0,1,2,3,...,n]
+    idx = [_ for _ in range(len(data_list))] # timestamps index [0,1,2,3,...,n]
 
     model.eval()
     timestamp_temporal_path = {}
 
     for future_sample_id in tqdm(idx):
-        if future_sample_id < args.history_len: continue
-        true_timestamp = test_list[future_sample_id][0][3]
+        # if future_sample_id < args.history_len: continue
+        true_timestamp = data_list[future_sample_id][0][3]
         # future_sample as the future graph index
-        future_list = test_list[future_sample_id][:,:3]
+        future_list = data_list[future_sample_id][:,:3]
         # get history graph list
-        history_list = test_list[future_sample_id - args.history_len : future_sample_id]
+        if future_sample_id < args.history_len:
+            history_list = data_list[:args.history_len]
+        else:
+            history_list = data_list[future_sample_id - args.history_len : future_sample_id]
     
         # Generate graph
         # history_g_list = [utils.build_graph(num_nodes, num_rels, snap, device) for snap in history_list]
@@ -246,16 +249,27 @@ def save_rep(model, test_list, num_rels, num_nodes, model_name, dataset_type, mo
         
         for batch in future_loader:
             t_batch, h_batch = utils.all_negative(num_nodes, batch)
+            s,r,o=batch.t()
+            input_batch = torch.stack([s.unsqueeze(-1).expand(-1, 1),r.unsqueeze(-1).expand(-1, 1),o.unsqueeze(-1).expand(-1, 1)], dim=-1)
+            
             # _, feature_dict = model(history_graph, t_batch)
             # _, _ = model(history_graph, h_batch)
 
-            timestamp_temporal_path.setdefault(true_timestamp, {}).update(model(history_graph, t_batch)[1])
-            timestamp_temporal_path[true_timestamp].update(model(history_graph, h_batch)[1])
-            utils.synchronize()
+            timestamp_temporal_path.setdefault(true_timestamp, {}).update(model(history_graph, input_batch)[1])
+            # timestamp_temporal_path[true_timestamp].update(model(history_graph, h_batch)[1])
+            
+            # # 创建一个集合，包含 batch 中的所有 (s, r) 键
+            # batch_keys = set((s.item(), r.item()) for s, r, _ in batch)
+            
+            # # 遍历 timestamp_temporal_path[true_timestamp] 中的所有键
+            # for key in list(timestamp_temporal_path[true_timestamp].keys()):
+            #     # 如果键不在 batch_keys 中，就删除这个键
+            #     if key not in batch_keys:
+            #         del timestamp_temporal_path[true_timestamp][key]
         # This is the end of prediction at 'future_sample_id' time
     # This is the end of prediction at test_set
     utils.synchronize()
-    np.save(f'timestamp_temporal_path_{dataset_type}_{rank}.npy', timestamp_temporal_path)
+    np.save(f'timestamp_temporal_path_{dataset_type}.npy', timestamp_temporal_path)
     del timestamp_temporal_path
 
 
@@ -294,10 +308,7 @@ if __name__ == '__main__':
     utils.set_rand_seed(2023)
     working_dir = utils.create_working_directory(args)
 
-    model_name = "bsize:{}-neg:{}-hislen:{}-msg:{}-aggr:{}-dim:{}+{}|{}|{}|{}|{}"\
-        .format(args.batch_size, args.negative_num, args.history_len, args.message_func, args.aggregate_func, 
-                args.input_dim, args.hidden_dims, args.short_cut, args.layer_norm,
-                args.time_encoding, args.time_encoding_independent)
+    model_name = f"bsize:{args.batch_size}-neg:{args.negative_num}-hislen:{args.history_len}-msg:{args.message_func}-aggr:{args.aggregate_func}-dim:{args.input_dim}+{args.hidden_dims}|{args.short_cut}|{args.layer_norm}|{args.time_encoding}|{args.time_encoding_independent}"
 
     model_state_file = model_name
 
@@ -305,10 +316,10 @@ if __name__ == '__main__':
     data = utils.load_data(args.dataset)
 
     if utils.get_rank() == 0:
-        print("# Sanity Check: stat name : {}".format(model_state_file))
-        print("# Sanity Check:  entities: {}".format(data.num_nodes))
-        print("# Sanity Check:  relations: {}".format(data.num_rels))
-        print("# Sanity Check:  edges: {}".format(len(data.train)))
+        print(f"# Sanity Check: stat name : {model_state_file}")
+        print(f"# Sanity Check:  entities: {data.num_nodes}")
+        print(f"# Sanity Check:  relations: {data.num_rels}")
+        print(f"# Sanity Check:  edges: {len(data.train)}")
 
 
     # change the view of the data
